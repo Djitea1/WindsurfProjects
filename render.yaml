@@ -2,6 +2,5 @@ services:
   - type: web
     name: xml-search-webapp
     env: python
-    pythonVersion: "3.11"
     startCommand: python3 app.py
     plan: free
