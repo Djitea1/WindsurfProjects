@@ -4,10 +4,12 @@ import os
 import zipfile
 import tempfile
 import xml.etree.ElementTree as ET
+import shutil
 
 app = Flask(__name__)
 UPLOAD_FOLDER = tempfile.mkdtemp()
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
 
 # Helper to extract folder structure
 def get_folder_structure(root_path):
@@ -21,6 +23,14 @@ def get_folder_structure(root_path):
         })
     return structure
 
+# Safe extraction to prevent zip slip
+def safe_extract(zip_ref, extract_path):
+    for member in zip_ref.namelist():
+        member_path = os.path.abspath(os.path.join(extract_path, member))
+        if not member_path.startswith(os.path.abspath(extract_path)):
+            raise Exception("Unsafe ZIP file detected!")
+    zip_ref.extractall(extract_path)
+
 @app.route('/upload', methods=['POST'])
 def upload_zip():
     if 'zipfile' not in request.files:
@@ -32,7 +42,12 @@ def upload_zip():
     zip_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(zip_path)
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_path)
+        try:
+            safe_extract(zip_ref, extract_path)
+        except Exception as e:
+            # Clean up extracted files if unsafe
+            shutil.rmtree(extract_path, ignore_errors=True)
+            return jsonify({'error': str(e)}), 400
     structure = get_folder_structure(extract_path)
     return jsonify({'extract_path': extract_path, 'structure': structure})
 
