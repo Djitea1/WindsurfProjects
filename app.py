@@ -84,7 +84,7 @@ def search_xml():
                             if startings and not any(referencing_attr.startswith(prefix) for prefix in startings):
                                 continue
                             # Apply 'must NOT end with' filter if provided
-                            if not_endings and any(referencing_attr.lower().endswith(ending) for ending in not_endings):
+                            if not_endings and any(referencing_attr.lower().endswith(ending.lower()) for ending in not_endings):
                                 continue
                             result = {'file': os.path.relpath(file_path, extract_path)}
                             for field in all_fields:
