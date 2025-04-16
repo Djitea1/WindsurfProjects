@@ -100,4 +100,7 @@ def index():
     return send_from_directory('.', 'index.html')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Get port from environment variable or default to 5000
+    port = int(os.environ.get('PORT', 5000))
+    # Run app on all interfaces (0.0.0.0) and the specified port
+    app.run(host='0.0.0.0', port=port, debug=True)
