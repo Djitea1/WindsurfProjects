@@ -80,12 +80,20 @@ def search_xml():
                         if all(kw.lower() in entity_text.lower() for kw in keywords):
                             referencing_attr_elem = entity_rel.find('ReferencingAttributeName')
                             referencing_attr = referencing_attr_elem.text if referencing_attr_elem is not None else ''
+                            
                             # Apply 'must start with' filter if provided
                             if startings and not any(referencing_attr.startswith(prefix) for prefix in startings):
                                 continue
+                                
                             # Apply 'must NOT end with' filter if provided
-                            if not_endings and any(referencing_attr.lower().endswith(ending.lower()) for ending in not_endings):
-                                continue
+                            if not_endings:
+                                should_skip = False
+                                for ending in not_endings:
+                                    if referencing_attr.lower().endswith(ending.lower()):
+                                        should_skip = True
+                                        break
+                                if should_skip:
+                                    continue
                             result = {'file': os.path.relpath(file_path, extract_path)}
                             for field in all_fields:
                                 elem = entity_rel.find(field)
