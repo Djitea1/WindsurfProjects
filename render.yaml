@@ -1,6 +1,11 @@
+previews:
+  generation: automatic # Enable preview environments
+  
 services:
   - type: web
     name: xml-search-webapp
     env: python
+    pythonVersion: "3.11"
+    buildCommand: pip install -r requirements.txt
     startCommand: python3 app.py
     plan: free
