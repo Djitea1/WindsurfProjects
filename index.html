@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XML Search in ZIP</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f6f8fa; margin: 0; padding: 0; }
+        .container { max-width: 700px; margin: 30px auto; background: #fff; padding: 2em 2.5em 2em 2.5em; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        h2 { margin-top: 0; }
+        label { display: block; margin-top: 1.5em; margin-bottom: 0.5em; }
+        input[type="text"], select, textarea { width: 100%; padding: 0.5em; border: 1px solid #ccc; border-radius: 4px; }
+        .folder-list { max-height: 180px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: #fafbfc; margin-bottom: 1em; }
+        .folder-item { padding: 0.3em 0.7em; cursor: pointer; }
+        .folder-item.selected { background: #e6f0ff; font-weight: bold; }
+        button { margin-top: 1.5em; padding: 0.7em 2.5em; background: #1976d2; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; }
+        button:disabled { background: #b0b8c1; }
+        .results { margin-top: 2em; }
+        .result-card { background: #f3f6fa; border-radius: 4px; padding: 1em; margin-bottom: 1em; border: 1px solid #e0e3e8; }
+        .attr { color: #1976d2; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Search XML Attributes in ZIP</h2>
+    <form id="uploadForm">
+        <label for="zipfile">Select ZIP file:</label>
+        <input type="file" id="zipfile" name="zipfile" accept=".zip" required>
+        <button type="submit">Upload</button>
+    </form>
+    <div id="folderSection" style="display:none;">
+        <label>Select folder to search:</label>
+        <div class="folder-list" id="folderList"></div>
+        <label for="keywords">Search keywords (comma separated):</label>
+        <input type="text" id="keywords" placeholder="e.g. customer, invoice">
+        <label for="attributes">Attributes to return (comma separated):</label>
+        <input type="text" id="attributes" placeholder="e.g. id, name, date">
+        <label for="notEndings">ReferencingAttributeName must NOT end with (comma separated, e.g. id,ID,Id):</label>
+        <input type="text" id="notEndings" placeholder="id,ID,Id">
+        <label for="startings">ReferencingAttributeName must start with (comma separated, e.g. mmpl_):</label>
+        <input type="text" id="startings" placeholder="mmpl_">
+        <button id="searchBtn">Search</button>
+    </div>
+    <div class="results" id="results"></div>
+</div>
+<script>
+let extractPath = '';
+let folderList = [];
+let selectedFolder = '';
+
+function displayFolders(structure) {
+    const list = document.getElementById('folderList');
+    list.innerHTML = '';
+    folderList = structure.map(s => s.path);
+    folderList.forEach(folder => {
+        const div = document.createElement('div');
+        div.className = 'folder-item' + (folder === '.' ? ' selected' : '');
+        div.textContent = folder;
+        div.onclick = function() {
+            document.querySelectorAll('.folder-item').forEach(e => e.classList.remove('selected'));
+            div.classList.add('selected');
+            selectedFolder = folder;
+        };
+        if (folder === '.') selectedFolder = folder;
+        list.appendChild(div);
+    });
+}
+
+document.getElementById('uploadForm').onsubmit = async function(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('zipfile');
+    if (!fileInput.files.length) return;
+    const formData = new FormData();
+    formData.append('zipfile', fileInput.files[0]);
+    const res = await fetch('/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.structure) {
+        extractPath = data.extract_path;
+        displayFolders(data.structure);
+        document.getElementById('folderSection').style.display = '';
+    } else {
+        alert('Failed to extract ZIP.');
+    }
+};
+
+document.getElementById('searchBtn').onclick = async function() {
+    const keywords = document.getElementById('keywords').value.split(',').map(s => s.trim()).filter(Boolean);
+    const attributes = document.getElementById('attributes').value.split(',').map(s => s.trim()).filter(Boolean);
+    const notEndings = document.getElementById('notEndings').value.split(',').map(s => s.trim()).filter(Boolean);
+    const startings = document.getElementById('startings').value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!selectedFolder) { alert('Select a folder.'); return; }
+    const res = await fetch('/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            extract_path: extractPath,
+            folder: selectedFolder,
+            keywords,
+            attributes,
+            not_endings: notEndings,
+            startings: startings
+        })
+    });
+    const data = await res.json();
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = '';
+    if (data.results && data.results.length) {
+        data.results.forEach(r => {
+            const card = document.createElement('div');
+            card.className = 'result-card';
+            card.innerHTML = `<b>File:</b> ${r.file}<br>` +
+                Object.entries(r).filter(([k])=>k!=='file').map(([k,v]) => `<span class="attr">${k}</span>: ${v}`).join('<br>');
+            resultsDiv.appendChild(card);
+        });
+    } else {
+        resultsDiv.textContent = 'No matching XML files found.';
+    }
+};
+</script>
+</body>
+</html>
