@@ -2,6 +2,6 @@ services:
   - type: web
     name: xml-search-webapp
     env: python
-    buildCommand: python3 -m pip install -r requirements.txt
+    pythonVersion: "3.11"
+    buildCommand: python3 -m pip install --upgrade pip && python3 -m pip install -r requirements.txt
     startCommand: python3 app.py
-    plan: free
