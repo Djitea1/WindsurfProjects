@@ -1,121 +1,211 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XML Search in ZIP</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f6f8fa; margin: 0; padding: 0; }
-        .container { max-width: 700px; margin: 30px auto; background: #fff; padding: 2em 2.5em 2em 2.5em; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-        h2 { margin-top: 0; }
-        label { display: block; margin-top: 1.5em; margin-bottom: 0.5em; }
-        input[type="text"], select, textarea { width: 100%; padding: 0.5em; border: 1px solid #ccc; border-radius: 4px; }
-        .folder-list { max-height: 180px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: #fafbfc; margin-bottom: 1em; }
-        .folder-item { padding: 0.3em 0.7em; cursor: pointer; }
-        .folder-item.selected { background: #e6f0ff; font-weight: bold; }
-        button { margin-top: 1.5em; padding: 0.7em 2.5em; background: #1976d2; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; }
-        button:disabled { background: #b0b8c1; }
-        .results { margin-top: 2em; }
-        .result-card { background: #f3f6fa; border-radius: 4px; padding: 1em; margin-bottom: 1em; border: 1px solid #e0e3e8; }
-        .attr { color: #1976d2; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>XML Search in ZIP</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f6f8fa; margin: 0; padding: 0; }
+    .container { max-width: 700px; margin: 30px auto; background: #fff;
+      padding: 2em 2.5em; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    h2 { margin-top: 0; }
+    label { display: block; margin-top: 1.5em; margin-bottom: 0.5em; }
+    input[type="text"], select, textarea { width: 100%; padding: 0.5em;
+      border: 1px solid #ccc; border-radius: 4px; }
+    .folder-list, .folder-tree { max-height: 180px; overflow-y: auto;
+      border: 1px solid #ddd; border-radius: 4px; background: #fafbfc;
+      margin-bottom: 1em; padding: 0.5em; }
+    .results { margin-top: 2em; }
+    .result-card { background: #f3f6fa; border-radius: 4px; padding: 1em;
+      margin-bottom: 1em; border: 1px solid #e0e3e8; }
+    .attr { color: #1976d2; }
+    button { margin-top: 1.5em; padding: 0.7em 2.5em; background: #1976d2;
+      color: #fff; border: none; border-radius: 4px; cursor: pointer;
+      font-size: 1em; }
+    button:disabled { background: #b0b8c1; }
+
+    /* Tree‐view styles */
+    .hidden { display: none; }
+    ul { list-style-type: none; padding-left: 1em; margin: 0; }
+    li { margin: 0.2em 0; }
+    li span { cursor: pointer; display: inline-block; padding: 0.1em; }
+    li span:hover { text-decoration: underline; }
+    li span.selected { background: #e6f0ff; font-weight: bold; }
+  </style>
 </head>
 <body>
-<div class="container">
+  <div class="container">
     <h2>Search XML Attributes in ZIP</h2>
+
     <form id="uploadForm">
-        <label for="zipfile">Select ZIP file:</label>
-        <input type="file" id="zipfile" name="zipfile" accept=".zip" required>
-        <button type="submit">Upload</button>
+      <label for="zipfile">Select ZIP file:</label>
+      <input type="file" id="zipfile" name="zipfile" accept=".zip" required>
+      <button type="submit">Upload</button>
     </form>
+
     <div id="folderSection" style="display:none;">
-        <label>Select folder to search:</label>
-        <div class="folder-list" id="folderList"></div>
-        <label for="keywords">Search keywords (comma separated):</label>
-        <input type="text" id="keywords" placeholder="e.g. customer, invoice">
-        <label for="attributes">Attributes to return (comma separated):</label>
-        <input type="text" id="attributes" placeholder="e.g. id, name, date">
-        <label for="notEndings">ReferencingAttributeName must NOT end with (comma separated, e.g. id,ID,Id):</label>
-        <input type="text" id="notEndings" placeholder="id,ID,Id">
-        <label for="startings">ReferencingAttributeName must start with (comma separated, e.g. mmpl_):</label>
-        <input type="text" id="startings" placeholder="mmpl_">
-        <button id="searchBtn">Search</button>
+      <label>Select folder to search:</label>
+      <!-- replaced flat list with tree container -->
+      <div id="folder-tree" class="folder-tree"></div>
+
+      <label for="keywords">Search keywords (comma separated):</label>
+      <input type="text" id="keywords" placeholder="e.g. customer, invoice">
+      <label for="attributes">Attributes to return (comma separated):</label>
+      <input type="text" id="attributes" placeholder="e.g. id, name, date">
+      <label for="notEndings">
+        ReferencingAttributeName must NOT end with (comma separated, e.g. id,ID,Id):
+      </label>
+      <input type="text" id="notEndings" placeholder="id,ID,Id">
+      <label for="startings">
+        ReferencingAttributeName must start with (comma separated, e.g. mmpl_):
+      </label>
+      <input type="text" id="startings" placeholder="mmpl_">
+
+      <button id="searchBtn">Search</button>
     </div>
+
     <div class="results" id="results"></div>
-</div>
-<script>
-let extractPath = '';
-let folderList = [];
-let selectedFolder = '';
+  </div>
 
-function displayFolders(structure) {
-    const list = document.getElementById('folderList');
-    list.innerHTML = '';
-    folderList = structure.map(s => s.path);
-    folderList.forEach(folder => {
-        const div = document.createElement('div');
-        div.className = 'folder-item' + (folder === '.' ? ' selected' : '');
-        div.textContent = folder;
-        div.onclick = function() {
-            document.querySelectorAll('.folder-item').forEach(e => e.classList.remove('selected'));
-            div.classList.add('selected');
-            selectedFolder = folder;
+  <script>
+    let extractPath = '';
+    let structure = [];
+    let selectedFolder = '';
+
+    // Build a nested UL from the flat structure list
+    function buildTree(entries, path = '.') {
+      const entry = entries.find(e => e.path === path);
+      if (!entry) return document.createElement('ul');
+      const ul = document.createElement('ul');
+
+      // Folders first
+      entry.folders.forEach(folderName => {
+        const fullPath = path === '.' ? folderName : `${path}/${folderName}`;
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.textContent = folderName;
+        span.onclick = () => {
+          // toggle child display
+          const childUl = li.querySelector('ul');
+          if (childUl) childUl.classList.toggle('hidden');
+          // mark as selected folder
+          document.querySelectorAll('#folder-tree span').forEach(s => s.classList.remove('selected'));
+          span.classList.add('selected');
+          selectedFolder = fullPath;
         };
-        if (folder === '.') selectedFolder = folder;
-        list.appendChild(div);
-    });
-}
+        li.appendChild(span);
 
-document.getElementById('uploadForm').onsubmit = async function(e) {
-    e.preventDefault();
-    const fileInput = document.getElementById('zipfile');
-    if (!fileInput.files.length) return;
-    const formData = new FormData();
-    formData.append('zipfile', fileInput.files[0]);
-    const res = await fetch('/upload', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (data.structure) {
-        extractPath = data.extract_path;
-        displayFolders(data.structure);
-        document.getElementById('folderSection').style.display = '';
-    } else {
-        alert('Failed to extract ZIP.');
+        const childUl = buildTree(entries, fullPath);
+        childUl.classList.add('hidden');
+        li.appendChild(childUl);
+        ul.appendChild(li);
+      });
+
+      // Then files (leaf nodes)
+      entry.files.forEach(fileName => {
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.textContent = fileName;
+        span.onclick = () => {
+          document.querySelectorAll('#folder-tree span').forEach(s => s.classList.remove('selected'));
+          span.classList.add('selected');
+          selectedFolder = path;  // selecting a file still picks its folder
+        };
+        li.appendChild(span);
+        ul.appendChild(li);
+      });
+
+      return ul;
     }
-};
 
-document.getElementById('searchBtn').onclick = async function() {
-    const keywords = document.getElementById('keywords').value.split(',').map(s => s.trim()).filter(Boolean);
-    const attributes = document.getElementById('attributes').value.split(',').map(s => s.trim()).filter(Boolean);
-    const notEndings = document.getElementById('notEndings').value.split(',').map(s => s.trim()).filter(Boolean);
-    const startings = document.getElementById('startings').value.split(',').map(s => s.trim()).filter(Boolean);
-    if (!selectedFolder) { alert('Select a folder.'); return; }
-    const res = await fetch('/search', {
+    // Handle ZIP upload
+    document.getElementById('uploadForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('zipfile');
+      if (!fileInput.files.length) return;
+      const formData = new FormData();
+      formData.append('zipfile', fileInput.files[0]);
+      const res = await fetch('/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.structure) {
+        extractPath = data.extract_path;
+        // Normalize paths to use forward slashes for deep navigation
+        structure = data.structure.map(e => ({
+          path: e.path.replace(/\\/g, '/'),
+          folders: e.folders,
+          files: e.files
+        }));
+        // render tree
+        const tree = buildTree(structure);
+        const container = document.getElementById('folder-tree');
+        container.innerHTML = '';
+        container.appendChild(tree);
+        // show the folder section
+        document.getElementById('folderSection').style.display = '';
+      } else {
+        alert('Failed to extract ZIP.');
+      }
+    };
+
+    // Handle XML search
+    document.getElementById('searchBtn').onclick = async function() {
+      if (!selectedFolder) {
+        alert('Select a folder to search.');
+        return;
+      }
+      const keywords  = document.getElementById('keywords').value
+                              .split(',').map(s=>s.trim()).filter(Boolean);
+      const attributes= document.getElementById('attributes').value
+                              .split(',').map(s=>s.trim()).filter(Boolean);
+      const notEndings= document.getElementById('notEndings').value
+                              .split(',').map(s=>s.trim()).filter(Boolean);
+      const startings = document.getElementById('startings').value
+                              .split(',').map(s=>s.trim()).filter(Boolean);
+
+      const res = await fetch('/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            extract_path: extractPath,
-            folder: selectedFolder,
-            keywords,
-            attributes,
-            not_endings: notEndings,
-            startings: startings
+          extract_path: extractPath,
+          folder: selectedFolder,
+          keywords,
+          attributes,
+          not_endings: notEndings,
+          startings
         })
-    });
-    const data = await res.json();
-    const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = '';
-    if (data.results && data.results.length) {
+      });
+      const data = await res.json();
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '';
+
+      if (data.results && data.results.length) {
+        // Get all requested attributes from the input field
+        const attributesInput = document.getElementById('attributes').value;
+        const requestedAttrs = attributesInput.split(',').map(s=>s.trim()).filter(Boolean);
         data.results.forEach(r => {
-            const card = document.createElement('div');
-            card.className = 'result-card';
-            card.innerHTML = `<b>File:</b> ${r.file}<br>` +
-                Object.entries(r).filter(([k])=>k!=='file').map(([k,v]) => `<span class="attr">${k}</span>: ${v}`).join('<br>');
-            resultsDiv.appendChild(card);
+          const card = document.createElement('div');
+          card.className = 'result-card';
+          let html = `<b>File:</b> ${r.file}<br>`;
+          // Always show ReferencingAttributeName, ReferencedEntityName, ReferencingEntityName
+          const alwaysShow = ['ReferencingAttributeName', 'ReferencedEntityName', 'ReferencingEntityName'];
+          alwaysShow.forEach(attr => {
+            if (r[attr] !== undefined) {
+              html += `<span class="attr">${attr}</span>: ${r[attr] || ''}<br>`;
+            }
+          });
+          // Show all requested attributes, even if empty
+          requestedAttrs.forEach(attr => {
+            if (!alwaysShow.includes(attr)) {
+              html += `<span class="attr">${attr}</span>: ${r[attr] || ''}<br>`;
+            }
+          });
+          card.innerHTML = html;
+          resultsDiv.appendChild(card);
         });
-    } else {
+      } else {
         resultsDiv.textContent = 'No matching XML files found.';
-    }
-};
-</script>
+      }
+    };
+  </script>
 </body>
 </html>
